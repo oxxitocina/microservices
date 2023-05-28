@@ -1,9 +1,10 @@
 package main
 
 import (
-	"log"
-
+	"github.com/golang/protobuf/proto"
 	amqp "github.com/rabbitmq/amqp091-go"
+	"log"
+	pb "rabbitMQhelloworld/api/proto"
 )
 
 func failOnError(err error, msg string) {
@@ -13,6 +14,14 @@ func failOnError(err error, msg string) {
 }
 
 func main() {
+	// Send the request to the server
+	//response, err := client.SendMessage(context.Background(), request)
+	//if err != nil {
+	//	log.Fatalf("Failed to call RPC: %v", err)
+	//}
+	//
+	//// Process the response from the server
+	//log.Printf("Response received: %s", response.Message)
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	failOnError(err, "Failed to connect to RabbitMQ")
 	defer conn.Close()
@@ -49,13 +58,6 @@ func main() {
 		false,
 		nil,
 	)
-	err = ch.QueueBind(
-		q.Name, // queue name
-		"all",  // routing key, supply a routingKey when sending, but its value is ignored for fanout exchanges.
-		"logs", // exchange
-		false,
-		nil,
-	)
 	failOnError(err, "Failed to bind a queue")
 
 	msgs, err := ch.Consume(
@@ -73,8 +75,16 @@ func main() {
 
 	go func() {
 		for d := range msgs {
-			log.Printf(" [x] %s", d.Body)
+			msg := &pb.MyMessage{}
+			log.Printf("marshaled version: %s \n", msg)
+			err := proto.Unmarshal(d.Body, msg)
+			if err != nil {
+				return
+			}
+			log.Printf("unmarshaled version: %s \n", msg)
+
 		}
+
 	}()
 
 	log.Printf(" [*] Waiting for logs. To exit press CTRL+C")

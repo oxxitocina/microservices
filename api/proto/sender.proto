@@ -1,0 +1,12 @@
+syntax = "proto3";
+option go_package = "/api/proto";
+package sender;
+
+message MyMessage {
+  string data = 1;
+  string reciever = 2;
+}
+
+service MyService {
+  rpc SendMessage(MyMessage) returns (MyMessage);
+}
