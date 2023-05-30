@@ -27,9 +27,62 @@ type server struct {
 }
 
 func (s *server) SendMessage(ctx context.Context, req *pb.MyMessage) (*pb.MyMessage, error) {
-	// Implement your logic here
+	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	failOnError(err, "Failed to connect to RabbitMQ")
+	defer conn.Close()
+
+	ch, err := conn.Channel()
+	failOnError(err, "Failed to open a channel")
+	defer ch.Close()
+
+	err = ch.ExchangeDeclare(
+		"logs",   // name
+		"direct", // type
+		true,     // durable
+		true,     // auto-deleted
+		false,    // internal
+		false,    // no-wait
+		nil,      // arguments
+	)
+	failOnError(err, "Failed to declare an exchange")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	body, err := proto.Marshal(req)
+
+	err = ch.PublishWithContext(
+		ctx,
+		"logs",       // exchange
+		req.Reciever, // routing key (send to everyone)
+		false,        // mandatory
+		false,        // immediate
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        body,
+		})
+	failOnError(err, "Failed to publish a message")
+
 	response := &pb.MyMessage{Data: "ok"}
 	return response, nil
+}
+
+func bodyFrom() *pb.MyMessage {
+	var data, receiver string
+
+	println("Write your reciever here:")
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Scan(&receiver)
+
+	println("Write your message here:")
+	scanner, _ := reader.ReadString('\n')
+	data, _ = reader.ReadString('\n')
+	println(scanner)
+
+	return &pb.MyMessage{
+		Data:     data,
+		Reciever: receiver,
+	}
 }
 
 func main() {
@@ -51,96 +104,23 @@ func main() {
 		}
 	}()
 
-	// Code for RabbitMQ connection and message publishing
-	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
-	failOnError(err, "Failed to connect to RabbitMQ")
+	request := bodyFrom()
+
+	conn, err := grpc.Dial(listenAddr, grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("failed to connect: %v", err)
+	}
 	defer conn.Close()
-	ch, err := conn.Channel()
-	failOnError(err, "Failed to open a channel")
-	defer ch.Close()
 
-	err = ch.ExchangeDeclare(
-		"logs",   // name
-		"direct", // type
-		true,     // durable
-		true,     // auto-deleted
-		false,    // internal
-		false,    // no-wait
-		nil,      // arguments
-	)
-	failOnError(err, "Failed to declare an exchange")
+	client := pb.NewMyServiceClient(conn)
+	response, err := client.SendMessage(context.Background(), request)
+	if err != nil {
+		log.Fatalf("error while calling send RPC %v", err)
+	}
+	log.Printf("response from server: message: %v", response.Data)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	println("Choose user: ")
-	body, user := bodyFrom()
-	err = ch.PublishWithContext(
-		ctx,
-		"logs", // exchange
-		user,   // routing key (send to everyone)
-		false,  // mandatory
-		false,  // immediate
-		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        body,
-		})
-	failOnError(err, "Failed to publish a message")
-	// Wait for termination signal
 	<-sigCh
 
 	log.Println("Termination signal received. Stopping the server...")
 	log.Printf("Server listened on %s", listenAddr)
 }
-
-func bodyFrom() ([]byte, string) {
-	var s, user string
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Scan(&user)
-	println("Write your message here:")
-	r, _ := reader.ReadString('\n')
-	s, err := reader.ReadString('\n')
-	body, err := proto.Marshal(&pb.MyMessage{
-		Data:     s,
-		Reciever: user,
-	})
-	failOnError(err, "Error reading input")
-	println(r)
-	return body, user
-}
-
-/*
-	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
-	failOnError(err, "Failed to connect to RabbitMQ")
-	defer conn.Close()
-
-	ch, err := conn.Channel()
-	failOnError(err, "Failed to open a channel")
-	defer ch.Close()
-
-	err = ch.ExchangeDeclare(
-		"logs",   // name
-		"direct", // type
-		true,     // durable
-		true,     // auto-deleted
-		false,    // internal
-		false,    // no-wait
-		nil,      // arguments
-	)
-	failOnError(err, "Failed to declare an exchange")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	println("Choose user: ")
-	body, user := bodyFrom()
-	err = ch.PublishWithContext(
-		ctx,
-		"logs", // exchange
-		user,   // routing key (send to everyone)
-		false,  // mandatory
-		false,  // immediate
-		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        body,
-		})
-	failOnError(err, "Failed to publish a message")
-*/
