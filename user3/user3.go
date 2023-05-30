@@ -50,6 +50,13 @@ func main() {
 		false,
 		nil,
 	)
+	err = ch.QueueBind(
+		"user3", // queue name
+		"all",   // routing key, supply a routingKey when sending, but its value is ignored for fanout exchanges.
+		"logs",  // exchange
+		false,
+		nil,
+	)
 
 	failOnError(err, "Failed to bind a queue")
 

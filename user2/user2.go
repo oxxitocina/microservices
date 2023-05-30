@@ -50,6 +50,13 @@ func main() {
 		false,
 		nil,
 	)
+	err = ch.QueueBind(
+		"user2", // queue name
+		"all",   // routing key, supply a routingKey when sending, but its value is ignored for fanout exchanges.
+		"logs",  // exchange
+		false,
+		nil,
+	)
 
 	failOnError(err, "Failed to bind a queue")
 
@@ -69,7 +76,6 @@ func main() {
 	go func() {
 		for d := range msgs {
 			msg := &pb.MyMessage{}
-			log.Printf("marshaled version: %s \n", msg)
 			err := proto.Unmarshal(d.Body, msg)
 			if err != nil {
 				return

@@ -14,14 +14,6 @@ func failOnError(err error, msg string) {
 }
 
 func main() {
-	// Send the request to the server
-	//response, err := client.SendMessage(context.Background(), request)
-	//if err != nil {
-	//	log.Fatalf("Failed to call RPC: %v", err)
-	//}
-	//
-	//// Process the response from the server
-	//log.Printf("Response received: %s", response.Message)
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	failOnError(err, "Failed to connect to RabbitMQ")
 	defer conn.Close()
@@ -51,10 +43,25 @@ func main() {
 	)
 	failOnError(err, "Failed to declare a queue")
 
+	qall, err := ch.QueueDeclare(
+		"user1", // name
+		true,    // durable
+		false,   // delete when unused
+		false,   // exclusive, delete queue after
+		false,   // no-wait
+		nil,     // arguments
+	)
 	err = ch.QueueBind(
 		q.Name,  // queue name
 		"user1", // routing key, supply a routingKey when sending, but its value is ignored for fanout exchanges.
 		"logs",  // exchange
+		false,
+		nil,
+	)
+	err = ch.QueueBind(
+		qall.Name, // queue name
+		"all",     // routing key, supply a routingKey when sending, but its value is ignored for fanout exchanges.
+		"logs",    // exchange
 		false,
 		nil,
 	)
@@ -76,7 +83,6 @@ func main() {
 	go func() {
 		for d := range msgs {
 			msg := &pb.MyMessage{}
-			log.Printf("marshaled version: %s \n", msg)
 			err := proto.Unmarshal(d.Body, msg)
 			if err != nil {
 				return
