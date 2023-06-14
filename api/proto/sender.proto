@@ -4,7 +4,8 @@ package sender;
 
 message MyMessage {
   string data = 1;
-  string reciever = 2;
+  string receiver = 2;
+  string sender = 3;  // Added field
 }
 
 service MyService {

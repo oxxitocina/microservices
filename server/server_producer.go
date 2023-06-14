@@ -8,7 +8,6 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 	"google.golang.org/grpc"
 	"log"
-	"net"
 	"os"
 	"os/signal"
 	pb "rabbitMQhelloworld/api/proto"
@@ -22,24 +21,30 @@ func failOnError(err error, msg string) {
 	}
 }
 
-type server struct {
-	pb.UnimplementedMyServiceServer
-}
-
-func (s *server) SendMessage(ctx context.Context, req *pb.MyMessage) (*pb.MyMessage, error) {
+func (s *common.Server) SendMessage(ctx context.Context, req *pb.MyMessage) (*pb.MyMessage, error) {
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	failOnError(err, "Failed to connect to RabbitMQ")
-	defer conn.Close()
+	defer func(conn *amqp.Connection) {
+		err := conn.Close()
+		if err != nil {
+			fmt.Printf("Some error accured: %s", err)
+		}
+	}(conn)
 
 	ch, err := conn.Channel()
 	failOnError(err, "Failed to open a channel")
-	defer ch.Close()
+	defer func(ch *amqp.Channel) {
+		err := ch.Close()
+		if err != nil {
+			fmt.Printf("Some error accured: %s", err)
+		}
+	}(ch)
 
 	err = ch.ExchangeDeclare(
 		"logs",   // name
 		"direct", // type
 		true,     // durable
-		true,     // auto-deleted
+		false,    // auto-deleted
 		false,    // internal
 		false,    // no-wait
 		nil,      // arguments
@@ -54,7 +59,7 @@ func (s *server) SendMessage(ctx context.Context, req *pb.MyMessage) (*pb.MyMess
 	err = ch.PublishWithContext(
 		ctx,
 		"logs",       // exchange
-		req.Reciever, // routing key (send to everyone)
+		req.Receiver, // routing key (send to everyone)
 		false,        // mandatory
 		false,        // immediate
 		amqp.Publishing{
@@ -70,9 +75,12 @@ func (s *server) SendMessage(ctx context.Context, req *pb.MyMessage) (*pb.MyMess
 func bodyFrom() *pb.MyMessage {
 	var data, receiver string
 
-	println("Write your reciever here:")
+	println("Write your receiver here:")
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Scan(&receiver)
+	_, err := fmt.Scan(&receiver)
+	if err != nil {
+		return nil
+	}
 
 	println("Write your message here:")
 	scanner, _ := reader.ReadString('\n')
@@ -81,7 +89,7 @@ func bodyFrom() *pb.MyMessage {
 
 	return &pb.MyMessage{
 		Data:     data,
-		Reciever: receiver,
+		Receiver: receiver,
 	}
 }
 
@@ -90,19 +98,6 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
 	listenAddr := ":50051"
-	s := grpc.NewServer()
-	pb.RegisterMyServiceServer(s, &server{})
-
-	lis, err := net.Listen("tcp", listenAddr)
-	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
-	}
-
-	go func() {
-		if err := s.Serve(lis); err != nil {
-			log.Fatalf("Failed to serve: %v", err)
-		}
-	}()
 
 	request := bodyFrom()
 
@@ -110,7 +105,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to connect: %v", err)
 	}
-	defer conn.Close()
+	defer func(conn *grpc.ClientConn) {
+		err := conn.Close()
+		if err != nil {
+			fmt.Printf("Some error accured: %s", err)
+		}
+	}(conn)
 
 	client := pb.NewMyServiceClient(conn)
 	response, err := client.SendMessage(context.Background(), request)
@@ -122,5 +122,5 @@ func main() {
 	<-sigCh
 
 	log.Println("Termination signal received. Stopping the server...")
-	log.Printf("Server listened on %s", listenAddr)
+	log.Printf("server listened on %s", listenAddr)
 }
