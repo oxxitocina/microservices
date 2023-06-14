@@ -58,7 +58,7 @@ func main() {
 	body := &pb.MyMessage{
 		Data:     message,
 		Receiver: "server",
-		Sender:   message,
+		Sender:   "user1",
 	}
 
 	// Connect to the gRPC server
