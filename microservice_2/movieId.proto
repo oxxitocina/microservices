@@ -1,0 +1,6 @@
+package movieidpackage;
+syntax = "proto3";
+
+message MovieId {
+    int32 id = 1;
+}
