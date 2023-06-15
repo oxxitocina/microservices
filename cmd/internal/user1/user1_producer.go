@@ -1,4 +1,4 @@
-package main
+package user1
 
 import (
 	"bufio"
@@ -21,7 +21,7 @@ type server struct {
 	pb.UnimplementedMyServiceServer
 }
 
-func main() {
+func UserProduce1() {
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	failOnError2(err, "Failed to connect to RabbitMQ")
 	defer func(conn *amqp.Connection) {

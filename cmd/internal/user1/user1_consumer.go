@@ -1,15 +1,14 @@
-package main
+package user1
 
 import (
-	_ "context"
 	"fmt"
-	_ "fmt"
-	"github.com/golang/protobuf/proto"
-	amqp "github.com/rabbitmq/amqp091-go"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/golang/protobuf/proto"
+	amqp "github.com/rabbitmq/amqp091-go"
 
 	pb "rabbitMQhelloworld/api/proto"
 )
@@ -20,38 +19,9 @@ func failOnError(err error, msg string) {
 	}
 }
 
-func main() {
-	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
-	failOnError(err, "Failed to connect to RabbitMQ")
-	defer func(conn *amqp.Connection) {
-		err := conn.Close()
-		if err != nil {
-			fmt.Printf("Some error accured: %s", err)
-		}
-	}(conn)
-
-	ch, err := conn.Channel()
-	failOnError(err, "Failed to open a channel")
-	defer func(ch *amqp.Channel) {
-		err := ch.Close()
-		if err != nil {
-			fmt.Printf("Some error accured: %s", err)
-		}
-	}(ch)
-
-	err = ch.ExchangeDeclare(
-		"logs",   // name
-		"direct", // type
-		true,     // durable
-		false,    // auto-deleted
-		false,    // internal
-		false,    // no-wait
-		nil,      // arguments
-	)
-	failOnError(err, "Failed to declare an exchange")
-
+func userConsume(ch *amqp.Channel) {
 	q, err := ch.QueueDeclare(
-		"user2", // name (receiver)
+		"user1", // name (receiver)
 		false,   // durable
 		false,   // delete when unused
 		false,   // exclusive
@@ -62,7 +32,7 @@ func main() {
 
 	err = ch.QueueBind(
 		q.Name,  // queue name
-		"user2", // routing key (receiver name)
+		"user1", // routing key (receiver name)
 		"logs",  // exchange
 		false,   // no-wait
 		nil,
@@ -71,7 +41,7 @@ func main() {
 
 	msgs, err := ch.Consume(
 		q.Name,  // queue
-		"user2", // consumer
+		"user1", // consumer
 		true,    // auto-ack
 		false,   // exclusive
 		false,   // no-local
@@ -80,7 +50,7 @@ func main() {
 	)
 	failOnError(err, "Failed to register a consumer")
 
-	log.Printf("%s consumer is listening for messages...", "user2")
+	log.Printf("%s consumer is listening for messages...", "user1")
 
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
@@ -102,5 +72,39 @@ func main() {
 	// Wait for termination signal
 	<-stopChan
 
-	log.Printf("%s consumer stopped receiving messages.", "user2")
+	log.Printf("%s consumer stopped receiving messages.", "user1")
+}
+
+func UserConsume() {
+	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	failOnError(err, "Failed to connect to RabbitMQ")
+	defer func(conn *amqp.Connection) {
+		err := conn.Close()
+		if err != nil {
+			fmt.Printf("Some error occurred: %s", err)
+		}
+	}(conn)
+
+	ch, err := conn.Channel()
+	failOnError(err, "Failed to open a channel")
+	defer func(ch *amqp.Channel) {
+		err := ch.Close()
+		if err != nil {
+			fmt.Printf("Some error occurred: %s", err)
+		}
+	}(ch)
+
+	err = ch.ExchangeDeclare(
+		"logs",   // name
+		"direct", // type
+		true,     // durable
+		false,    // auto-deleted
+		false,    // internal
+		false,    // no-wait
+		nil,      // arguments
+	)
+	failOnError(err, "Failed to declare an exchange")
+
+	// Run the user consumer
+	userConsume(ch)
 }

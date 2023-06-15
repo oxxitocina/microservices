@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"bufio"
@@ -98,7 +98,7 @@ func bodyFrom() *pb.MyMessage {
 	}
 }
 
-func main() {
+func ServerProduce() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
@@ -117,7 +117,7 @@ func main() {
 			fmt.Printf("error occurred %s", err)
 		}
 	}()
-
+	time.Sleep(100)
 	request := bodyFrom()
 
 	conn, err := grpc.Dial(listenAddr, grpc.WithInsecure())
