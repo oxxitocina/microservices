@@ -13,4 +13,4 @@ func TestUserProduce1(t *testing.T) {
 	}
 }
 
-//I stopped the tests, because most of the code are same in realization
+//I stopped the tests, because user1 and user2 code are very similar, difference only in keys and queue names
